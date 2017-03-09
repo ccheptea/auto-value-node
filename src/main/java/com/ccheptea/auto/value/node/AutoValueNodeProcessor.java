@@ -1,0 +1,207 @@
+package com.ccheptea.auto.value.node;
+
+import com.google.auto.service.AutoService;
+import com.google.auto.value.AutoValue;
+import com.google.auto.value.extension.AutoValueExtension;
+import com.google.common.collect.ImmutableSet;
+import com.squareup.javapoet.*;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.Processor;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.*;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import java.io.IOException;
+import java.util.*;
+import java.util.regex.Pattern;
+
+import static javax.lang.model.element.Modifier.FINAL;
+import static javax.lang.model.element.Modifier.PUBLIC;
+import static javax.tools.Diagnostic.Kind.ERROR;
+
+/**
+ * Created by constantin.cheptea
+ * on 07/03/2017.
+ */
+@AutoService(Processor.class)
+public class AutoValueNodeProcessor extends AbstractProcessor {
+    AutoValueNodeExtension extension = new AutoValueNodeExtension();
+    private Types typeUtils;
+    private Elements elementUtils;
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        List<TypeElement> elements = new LinkedList<>();
+        List<String> qualifiedElements = new ArrayList<>();
+
+        System.out.println("Processing nodes...");
+        for (Element element : roundEnv.getElementsAnnotatedWith(AutoValue.class)) {
+            AutoValueExtension.Context context = new LimitedContext(processingEnv, (TypeElement) element);
+            if (extension.applicable(context)) {
+                elements.add((TypeElement) element);
+                qualifiedElements.add(element.toString());
+            }
+        }
+
+        System.out.println("Found " + elements.size() + " node classes");
+
+        for (TypeElement element : elements) {
+            System.out.println("Node class => " + element);
+
+            String packageName = packageNameOf(element);
+            TypeSpec nodeClass = createNodeClass(element, packageName, qualifiedElements);
+            JavaFile file = JavaFile.builder(packageName, nodeClass).build();
+            try {
+                file.writeTo(processingEnv.getFiler());
+            } catch (IOException e) {
+                processingEnv.getMessager().printMessage(ERROR, "Failed to write Node_" + element.getSimpleName() + ": " + e.getLocalizedMessage());
+            }
+        }
+
+        return false;
+    }
+
+    private TypeSpec createNodeClass(TypeElement typeElement, String packageName, List<String> qualifiedElements) {
+        String autoValueClass = classNameOf(typeElement);
+        TypeSpec.Builder builder = TypeSpec
+                .classBuilder(ClassName.get(packageName, "Node_" + autoValueClass))
+                .addModifiers(PUBLIC, FINAL)
+                .superclass(ParameterizedTypeName.get(ClassName.get(Node.class), ClassName.get(typeElement)))
+                .addMethod(generateConstructor(typeElement));
+
+        List<ExecutableElement> properties = getProperties(typeElement);
+        System.out.println("\nListing properties " + properties.size() + " for " + autoValueClass + ":");
+        for (ExecutableElement property : properties) {
+            Name propertyName = property.getSimpleName();
+
+            String propertyTypeQualifiedName = property.getReturnType().toString();
+
+            System.out.println(propertyTypeQualifiedName);
+            String[] splitName = Pattern.compile(".", Pattern.LITERAL).split(propertyTypeQualifiedName);
+            String propertyTypeSimpleName = splitName[splitName.length - 1];
+            String propertyTypePackage = propertyTypeQualifiedName.substring(0, propertyTypeQualifiedName.lastIndexOf("."));
+
+            if (qualifiedElements.contains(propertyTypeQualifiedName)) {
+                builder.addMethod(generateNodeablePropertyMethod(propertyTypePackage, propertyTypeSimpleName, propertyName.toString()));
+            } else {
+                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyTypeSimpleName, propertyName.toString()));
+            }
+
+            System.out.println(propertyName);
+
+        }
+        return builder.build();
+    }
+
+    private MethodSpec generateNodeablePropertyMethod(String propertyTypePackage, String returnTypeSuffix, String methodName) {
+        return MethodSpec.methodBuilder(methodName)
+                .returns(ClassName.get(propertyTypePackage, "Node_" + returnTypeSuffix))
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addStatement("return new Node_$L(value == null ? null : value.$L())", returnTypeSuffix, methodName)
+                .build();
+    }
+
+    private MethodSpec generateSimplePropertyMethod(TypeMirror returnType, String returnTypeSuffix, String methodName) {
+        return MethodSpec.methodBuilder(methodName)
+                .returns(ParameterizedTypeName.get(ClassName.get(Node_Wrapper.class), ClassName.get(returnType)))
+                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
+                .addStatement("return new Node_Wrapper<>(value == null ? null : value.$L())", methodName)
+                .build();
+    }
+
+    private List<ExecutableElement> getProperties(TypeElement element) {
+        List<ExecutableElement> properties = new ArrayList<>();
+
+        for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
+            if (!method.getModifiers().contains(Modifier.ABSTRACT)) continue;
+            if (method.getSimpleName().toString().equals("node")) continue;
+            if (method.getReturnType() == null) continue;
+
+            properties.add(method);
+        }
+
+        return properties;
+    }
+
+    private static MethodSpec generateConstructor(TypeElement autoValueClass) {
+        return MethodSpec.constructorBuilder()
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(TypeName.get(autoValueClass.asType()), "value")
+                .addStatement("super(value)")
+                .build();
+    }
+
+    @Override
+    public Set<String> getSupportedAnnotationTypes() {
+        return ImmutableSet.of(AutoValue.class.getName());
+    }
+
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
+
+    @Override
+    public synchronized void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
+        typeUtils = processingEnv.getTypeUtils();
+        elementUtils = processingEnv.getElementUtils();
+    }
+
+    private static String classNameOf(TypeElement type) {
+        String name = type.getQualifiedName().toString();
+        String pkgName = packageNameOf(type);
+        return pkgName.isEmpty() ? name : name.substring(pkgName.length() + 1);
+    }
+
+    private static String packageNameOf(TypeElement type) {
+        while (true) {
+            Element enclosing = type.getEnclosingElement();
+            if (enclosing instanceof PackageElement) {
+                return ((PackageElement) enclosing).getQualifiedName().toString();
+            }
+            type = (TypeElement) enclosing;
+        }
+    }
+
+    private static class LimitedContext implements AutoValueExtension.Context {
+        private final ProcessingEnvironment processingEnvironment;
+        private final TypeElement autoValueClass;
+
+        public LimitedContext(ProcessingEnvironment processingEnvironment, TypeElement autoValueClass) {
+            this.processingEnvironment = processingEnvironment;
+            this.autoValueClass = autoValueClass;
+        }
+
+        @Override
+        public ProcessingEnvironment processingEnvironment() {
+            return processingEnvironment;
+        }
+
+        @Override
+        public String packageName() {
+            return processingEnvironment().getElementUtils().getPackageOf(autoValueClass).getQualifiedName().toString();
+        }
+
+        @Override
+        public TypeElement autoValueClass() {
+            return autoValueClass;
+        }
+
+        @Override
+        public Map<String, ExecutableElement> properties() {
+            return null;
+        }
+
+        @Override
+        public Set<ExecutableElement> abstractMethods() {
+            return null;
+        }
+    }
+
+}
