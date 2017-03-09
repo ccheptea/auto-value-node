@@ -4,6 +4,7 @@ import com.google.auto.service.AutoService;
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.AutoValueExtension;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 import com.squareup.javapoet.*;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -12,6 +13,7 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
@@ -20,6 +22,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import static com.google.auto.common.MoreElements.getLocalAndInheritedMethods;
 import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PUBLIC;
 import static javax.tools.Diagnostic.Kind.ERROR;
@@ -74,7 +77,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
                 .superclass(ParameterizedTypeName.get(ClassName.get(Node.class), ClassName.get(typeElement)))
                 .addMethod(generateConstructor(typeElement));
 
-        List<ExecutableElement> properties = getProperties(typeElement);
+        ImmutableSet<ExecutableElement> properties = getProperties(typeElement);
         System.out.println("\nListing properties " + properties.size() + " for " + autoValueClass + ":");
         for (ExecutableElement property : properties) {
             Name propertyName = property.getSimpleName();
@@ -114,18 +117,23 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
                 .build();
     }
 
-    private List<ExecutableElement> getProperties(TypeElement element) {
-        List<ExecutableElement> properties = new ArrayList<>();
+    private ImmutableSet<ExecutableElement> getProperties(TypeElement element) {
 
-        for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
-            if (!method.getModifiers().contains(Modifier.ABSTRACT)) continue;
-            if (method.getSimpleName().toString().equals("node")) continue;
-            if (method.getReturnType() == null) continue;
+        ImmutableSet<ExecutableElement> methods = getLocalAndInheritedMethods(element, elementUtils);
+        ImmutableSet<ExecutableElement> abstractMethods = abstractMethodsIn(methods);
+        ImmutableSet<ExecutableElement> propertyMethods = propertyMethodsIn(abstractMethods);
 
-            properties.add(method);
-        }
+//        List<ExecutableElement> properties = new ArrayList<>();
+//
+//        for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
+//            if (!method.getModifiers().contains(Modifier.ABSTRACT)) continue;
+//            if (method.getSimpleName().toString().equals("node")) continue;
+//            if (method.getReturnType() == null) continue;
+//
+//            properties.add(method);
+//        }
 
-        return properties;
+        return propertyMethods;
     }
 
     private static MethodSpec generateConstructor(TypeElement autoValueClass) {
@@ -167,6 +175,68 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             }
             type = (TypeElement) enclosing;
         }
+    }
+
+    private ImmutableSet<ExecutableElement> abstractMethodsIn(
+            ImmutableSet<ExecutableElement> methods) {
+        Set<Name> noArgMethods = Sets.newHashSet();
+        ImmutableSet.Builder<ExecutableElement> abstracts = ImmutableSet.builder();
+        for (ExecutableElement method : methods) {
+            if (method.getModifiers().contains(Modifier.ABSTRACT)) {
+                boolean hasArgs = !method.getParameters().isEmpty();
+                if (hasArgs || noArgMethods.add(method.getSimpleName())) {
+                    // If an abstract method with the same signature is inherited on more than one path,
+                    // we only add it once. At the moment we only do this check for no-arg methods. All
+                    // methods that AutoValue will implement are either no-arg methods or equals(Object).
+                    // The former is covered by this check and the latter will lead to vars.equals being
+                    // set to true, regardless of how many times it appears. So the only case that is
+                    // covered imperfectly here is that of a method that is inherited on more than one path
+                    // and that will be consumed by an extension. We could check parameters as well, but that
+                    // can be a bit tricky if any of the parameters are generic.
+                    abstracts.add(method);
+                }
+            }
+        }
+        return abstracts.build();
+    }
+
+    private ImmutableSet<ExecutableElement> propertyMethodsIn(ImmutableSet<ExecutableElement> abstractMethods) {
+        ImmutableSet.Builder<ExecutableElement> properties = ImmutableSet.builder();
+        for (ExecutableElement method : abstractMethods) {
+            if (method.getParameters().isEmpty()
+                    && !method.getSimpleName().toString().equals("node")
+                    && method.getReturnType().getKind() != TypeKind.VOID
+                    && objectMethodToOverride(method) == ObjectMethodToOverride.NONE) {
+                properties.add(method);
+            }
+        }
+        return properties.build();
+    }
+
+    private static ObjectMethodToOverride objectMethodToOverride(ExecutableElement method) {
+        String name = method.getSimpleName().toString();
+        switch (method.getParameters().size()) {
+            case 0:
+                if (name.equals("toString")) {
+                    return ObjectMethodToOverride.TO_STRING;
+                } else if (name.equals("hashCode")) {
+                    return ObjectMethodToOverride.HASH_CODE;
+                }
+                break;
+            case 1:
+                if (name.equals("equals")
+                        && method.getParameters().get(0).asType().toString().equals("java.lang.Object")) {
+                    return ObjectMethodToOverride.EQUALS;
+                }
+                break;
+            default:
+                // No relevant Object methods have more than one parameter.
+        }
+        return ObjectMethodToOverride.NONE;
+    }
+
+    private enum ObjectMethodToOverride {
+        NONE, TO_STRING, EQUALS, HASH_CODE
     }
 
     private static class LimitedContext implements AutoValueExtension.Context {
