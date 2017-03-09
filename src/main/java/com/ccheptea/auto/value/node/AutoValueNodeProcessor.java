@@ -177,8 +177,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         }
     }
 
-    private ImmutableSet<ExecutableElement> abstractMethodsIn(
-            ImmutableSet<ExecutableElement> methods) {
+    private ImmutableSet<ExecutableElement> abstractMethodsIn(ImmutableSet<ExecutableElement> methods) {
         Set<Name> noArgMethods = Sets.newHashSet();
         ImmutableSet.Builder<ExecutableElement> abstracts = ImmutableSet.builder();
         for (ExecutableElement method : methods) {
@@ -206,7 +205,8 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             if (method.getParameters().isEmpty()
                     && !method.getSimpleName().toString().equals("node")
                     && method.getReturnType().getKind() != TypeKind.VOID
-                    && objectMethodToOverride(method) == ObjectMethodToOverride.NONE) {
+//                    && objectMethodToOverride(method) == ObjectMethodToOverride.NONE
+                    ) {
                 properties.add(method);
             }
         }
