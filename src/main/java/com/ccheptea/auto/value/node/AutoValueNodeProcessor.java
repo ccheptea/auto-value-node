@@ -123,16 +123,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         ImmutableSet<ExecutableElement> abstractMethods = abstractMethodsIn(methods);
         ImmutableSet<ExecutableElement> propertyMethods = propertyMethodsIn(abstractMethods);
 
-//        List<ExecutableElement> properties = new ArrayList<>();
-//
-//        for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
-//            if (!method.getModifiers().contains(Modifier.ABSTRACT)) continue;
-//            if (method.getSimpleName().toString().equals("node")) continue;
-//            if (method.getReturnType() == null) continue;
-//
-//            properties.add(method);
-//        }
-
         return propertyMethods;
     }
 

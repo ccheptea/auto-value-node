@@ -1,7 +1,7 @@
 package input;
 
 
-public interface IOwner {
+interface IOwner {
     String firstName();
 
     String lastName();
