@@ -3,8 +3,9 @@ package com.ccheptea.auto.value.node;
 import com.google.auto.service.AutoService;
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.AutoValueExtension;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
+import com.google.common.base.Function;
+import com.google.common.base.Joiner;
+import com.google.common.collect.*;
 import com.squareup.javapoet.*;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -15,12 +16,11 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
+import java.beans.Introspector;
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Pattern;
 
 import static com.google.auto.common.MoreElements.getLocalAndInheritedMethods;
 import static javax.lang.model.element.Modifier.FINAL;
@@ -37,8 +37,15 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
     private Types typeUtils;
     private Elements elementUtils;
 
+    private ErrorReporter errorReporter;
+
+    ImmutableList<AutoValueExtension> extensions;
+
+
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        extensions = ImmutableList.copyOf(ServiceLoader.load(AutoValueExtension.class, getClass().getClassLoader()));
+        errorReporter = new ErrorReporter(processingEnv);
         Map<String, TypeElement> typeElements = new HashMap<>();
 
         System.out.println("Processing nodes...");
@@ -120,8 +127,134 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         ImmutableSet<ExecutableElement> methods = getLocalAndInheritedMethods(element, elementUtils);
         ImmutableSet<ExecutableElement> abstractMethods = abstractMethodsIn(methods);
         ImmutableSet<ExecutableElement> propertyMethods = propertyMethodsIn(abstractMethods);
+        ImmutableBiMap<String, ExecutableElement> properties = propertyNameToMethodMap(abstractMethods);
+
+//        BuilderSpec builderSpec = new BuilderSpec(type, processingEnv, errorReporter);
+//        Optional<BuilderSpec.Builder> builder = builderSpec.getBuilder();
+//        ImmutableSet<ExecutableElement> toBuilderMethods;
+//        if (builder.isPresent()) {
+//            toBuilderMethods = builder.get().toBuilderMethods(typeUtils, abstractMethods);
+//        } else {
+//            toBuilderMethods = ImmutableSet.of();
+//        }
+
+        ExtensionContext context = new ExtensionContext(processingEnv, element, properties, abstractMethods);
+        ImmutableList<AutoValueExtension> applicableExtensions = applicableExtensions(element, context);
+        ImmutableSet<ExecutableElement> consumedMethods = methodsConsumedByExtensions(element, applicableExtensions, context, abstractMethods, properties);
+
+        if(!consumedMethods.isEmpty()){
+            propertyMethods = immutableSetDifference(propertyMethods, consumedMethods);
+        }
 
         return propertyMethods;
+    }
+
+    private static <E> ImmutableSet<E> immutableSetDifference(ImmutableSet<E> a, ImmutableSet<E> b) {
+        if (Collections.disjoint(a, b)) {
+            return a;
+        } else {
+            return ImmutableSet.copyOf(Sets.difference(a, b));
+        }
+    }
+
+    private ImmutableSet<ExecutableElement> methodsConsumedByExtensions(
+            TypeElement type,
+            ImmutableList<AutoValueExtension> applicableExtensions,
+            ExtensionContext context,
+            ImmutableSet<ExecutableElement> abstractMethods,
+            ImmutableBiMap<String, ExecutableElement> properties) {
+        Set<ExecutableElement> consumed = Sets.newHashSet();
+        for (AutoValueExtension extension : applicableExtensions) {
+            Set<ExecutableElement> consumedHere = Sets.newHashSet();
+            for (String consumedProperty : extension.consumeProperties(context)) {
+                ExecutableElement propertyMethod = properties.get(consumedProperty);
+                if (propertyMethod == null) {
+                    errorReporter.reportError(
+                            "Extension " + extensionName(extension)
+                                    + " wants to consume a property that does not exist: " + consumedProperty,
+                            type);
+                } else {
+                    consumedHere.add(propertyMethod);
+                }
+            }
+            for (ExecutableElement consumedMethod : extension.consumeMethods(context)) {
+                if (!abstractMethods.contains(consumedMethod)) {
+                    errorReporter.reportError(
+                            "Extension " + extensionName(extension)
+                                    + " wants to consume a method that is not one of the abstract methods in this"
+                                    + " class: " + consumedMethod,
+                            type);
+                } else {
+                    consumedHere.add(consumedMethod);
+                }
+            }
+            for (ExecutableElement repeat : Sets.intersection(consumed, consumedHere)) {
+                errorReporter.reportError(
+                        "Extension " + extensionName(extension) + " wants to consume a method that was already"
+                                + " consumed by another extension", repeat);
+            }
+            consumed.addAll(consumedHere);
+        }
+        return ImmutableSet.copyOf(consumed);
+    }
+
+    private static String extensionName(AutoValueExtension extension) {
+        return extension.getClass().getName();
+    }
+
+    private ImmutableBiMap<String, ExecutableElement> propertyNameToMethodMap(
+            Set<ExecutableElement> propertyMethods) {
+        Map<String, ExecutableElement> map = Maps.newLinkedHashMap();
+        boolean allPrefixed = gettersAllPrefixed(propertyMethods);
+        for (ExecutableElement method : propertyMethods) {
+            String methodName = method.getSimpleName().toString();
+            String name = allPrefixed ? nameWithoutPrefix(methodName) : methodName;
+            Object old = map.put(name, method);
+            if (old != null) {
+                errorReporter.reportError("More than one @AutoValue property called " + name, method);
+            }
+        }
+        return ImmutableBiMap.copyOf(map);
+    }
+
+    private static boolean gettersAllPrefixed(Set<ExecutableElement> methods) {
+        return prefixedGettersIn(methods).size() == methods.size();
+    }
+
+    static ImmutableSet<ExecutableElement> prefixedGettersIn(Iterable<ExecutableElement> methods) {
+        ImmutableSet.Builder<ExecutableElement> getters = ImmutableSet.builder();
+        for (ExecutableElement method : methods) {
+            String name = method.getSimpleName().toString();
+            // TODO(emcmanus): decide whether getfoo() (without a capital) is a getter. Currently it is.
+            boolean get = name.startsWith("get") && !name.equals("get");
+            boolean is = name.startsWith("is") && !name.equals("is")
+                    && method.getReturnType().getKind() == TypeKind.BOOLEAN;
+            if (get || is) {
+                getters.add(method);
+            }
+        }
+        return getters.build();
+    }
+
+    /**
+     * Returns the name of the property defined by the given getter. A getter called {@code getFoo()}
+     * or {@code isFoo()} defines a property called {@code foo}. For consistency with JavaBeans, a
+     * getter called {@code getHTMLPage()} defines a property called {@code HTMLPage}. The
+     * <a href="https://docs.oracle.com/javase/8/docs/api/java/beans/Introspector.html#decapitalize-java.lang.String-">
+     * rule</a> is: the name of the property is the part after {@code get} or {@code is}, with the
+     * first letter lowercased <i>unless</i> the first two letters are uppercase. This works well
+     * for the {@code HTMLPage} example, but in these more enlightened times we use {@code HtmlPage}
+     * anyway, so the special behaviour is not useful, and of course it behaves poorly with examples
+     * like {@code OAuth}.
+     */
+    private String nameWithoutPrefix(String name) {
+        if (name.startsWith("get")) {
+            name = name.substring(3);
+        } else {
+            assert name.startsWith("is");
+            name = name.substring(2);
+        }
+        return Introspector.decapitalize(name);
     }
 
     private static MethodSpec generateConstructor(TypeElement autoValueClass) {
@@ -223,9 +356,48 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         return ObjectMethodToOverride.NONE;
     }
 
+    private ImmutableList<AutoValueExtension> applicableExtensions(TypeElement type, ExtensionContext context) {
+        List<AutoValueExtension> applicableExtensions = Lists.newArrayList();
+        List<AutoValueExtension> finalExtensions = Lists.newArrayList();
+        for (AutoValueExtension extension : extensions) {
+            if (extension.applicable(context)) {
+                if (extension.mustBeFinal(context)) {
+                    finalExtensions.add(extension);
+                } else {
+                    applicableExtensions.add(extension);
+                }
+            }
+        }
+        switch (finalExtensions.size()) {
+            case 0:
+                break;
+            case 1:
+                applicableExtensions.add(0, finalExtensions.get(0));
+                break;
+            default:
+                errorReporter.reportError(
+                        "More than one extension wants to generate the final class: "
+                                + FluentIterable.from(finalExtensions).transform(ExtensionName.INSTANCE)
+                                .join(Joiner.on(", ")),
+                        type);
+                break;
+        }
+        return ImmutableList.copyOf(applicableExtensions);
+    }
+
+    private enum ExtensionName implements Function<AutoValueExtension, String> {
+        INSTANCE;
+
+        @Override
+        public String apply(AutoValueExtension input) {
+            return extensionName(input);
+        }
+    }
+
     private enum ObjectMethodToOverride {
         NONE, TO_STRING, EQUALS, HASH_CODE
     }
+
 
     private static class LimitedContext implements AutoValueExtension.Context {
         private final ProcessingEnvironment processingEnvironment;
