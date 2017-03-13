@@ -193,7 +193,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             if (method.getParameters().isEmpty()
                     && !method.getSimpleName().toString().equals("node")
                     && method.getReturnType().getKind() != TypeKind.VOID
-//                    && objectMethodToOverride(method) == ObjectMethodToOverride.NONE
+                    && objectMethodToOverride(method) == ObjectMethodToOverride.NONE
                     ) {
                 properties.add(method);
             }
