@@ -39,25 +39,24 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        List<TypeElement> elements = new LinkedList<>();
-        List<String> qualifiedElements = new ArrayList<>();
+        Map<String, TypeElement> typeElements = new HashMap<>();
 
         System.out.println("Processing nodes...");
         for (Element element : roundEnv.getElementsAnnotatedWith(AutoValue.class)) {
             AutoValueExtension.Context context = new LimitedContext(processingEnv, (TypeElement) element);
             if (extension.applicable(context)) {
-                elements.add((TypeElement) element);
-                qualifiedElements.add(element.toString());
+                TypeElement typeElement = (TypeElement) element;
+                typeElements.put(typeElement.getQualifiedName().toString(), typeElement);
             }
         }
 
-        System.out.println("Found " + elements.size() + " node classes");
+        System.out.println("Found " + typeElements.size() + " node classes");
 
-        for (TypeElement element : elements) {
+        for (TypeElement element : typeElements.values()) {
             System.out.println("Node class => " + element);
 
             String packageName = packageNameOf(element);
-            TypeSpec nodeClass = createNodeClass(element, packageName, qualifiedElements);
+            TypeSpec nodeClass = createNodeClass(element, packageName, typeElements);
             JavaFile file = JavaFile.builder(packageName, nodeClass).build();
             try {
                 file.writeTo(processingEnv.getFiler());
@@ -69,7 +68,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         return false;
     }
 
-    private TypeSpec createNodeClass(TypeElement typeElement, String packageName, List<String> qualifiedElements) {
+    private TypeSpec createNodeClass(TypeElement typeElement, String packageName, Map<String, TypeElement> typeElements) {
         String autoValueClass = classNameOf(typeElement);
         TypeSpec.Builder builder = TypeSpec
                 .classBuilder(ClassName.get(packageName, "Node_" + autoValueClass))
@@ -85,18 +84,17 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             String propertyTypeQualifiedName = property.getReturnType().toString();
 
             System.out.println(propertyTypeQualifiedName);
-            String[] splitName = Pattern.compile(".", Pattern.LITERAL).split(propertyTypeQualifiedName);
-            String propertyTypeSimpleName = splitName[splitName.length - 1];
-            String propertyTypePackage = propertyTypeQualifiedName.substring(0, propertyTypeQualifiedName.lastIndexOf("."));
 
-            if (qualifiedElements.contains(propertyTypeQualifiedName)) {
+            if (typeElements.keySet().contains(propertyTypeQualifiedName)) {
+                String propertyTypePackage = packageNameOf(typeElements.get(propertyTypeQualifiedName));
+                String propertyTypeSimpleName = classNameOf(typeElements.get(propertyTypeQualifiedName));
+
                 builder.addMethod(generateNodeablePropertyMethod(propertyTypePackage, propertyTypeSimpleName, propertyName.toString()));
             } else {
-                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyTypeSimpleName, propertyName.toString()));
+                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), property.getReturnType().toString(), propertyName.toString()));
             }
 
             System.out.println(propertyName);
-
         }
         return builder.build();
     }
