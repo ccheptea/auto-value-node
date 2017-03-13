@@ -27,47 +27,11 @@ public abstract class Node<T> {
         return new AlternativeIfNull<>(value);
     }
 
-    public Alternative<T> ifNotPresent(Action action) {
+    public AlternativeIfNotNull<T> ifNotPresent(Action action) {
         if (value == null) {
             action.execute();
         }
 
-        return new Alternative<>(value);
-    }
-
-    public interface Action {
-        void execute();
-    }
-
-    interface Action1<T> {
-        void execute(T value);
-    }
-
-    final class AlternativeIfNull<T> {
-        private T value;
-
-        public AlternativeIfNull(T value) {
-            this.value = value;
-        }
-
-        public void otherwise(Action action) {
-            if (value == null) {
-                action.execute();
-            }
-        }
-    }
-
-    final class Alternative<T> {
-        private final T value;
-
-        public Alternative(T value) {
-            this.value = value;
-        }
-
-        public void otherwise(Action1<T> action) {
-            if (value != null) {
-                action.execute(value);
-            }
-        }
+        return new AlternativeIfNotNull<T>(value);
     }
 }

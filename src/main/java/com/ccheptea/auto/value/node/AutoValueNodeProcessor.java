@@ -48,7 +48,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         errorReporter = new ErrorReporter(processingEnv);
         Map<String, TypeElement> typeElements = new HashMap<>();
 
-        System.out.println("Processing nodes...");
         for (Element element : roundEnv.getElementsAnnotatedWith(AutoValue.class)) {
             AutoValueExtension.Context context = new LimitedContext(processingEnv, (TypeElement) element);
             if (extension.applicable(context)) {
@@ -142,7 +141,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         ImmutableList<AutoValueExtension> applicableExtensions = applicableExtensions(element, context);
         ImmutableSet<ExecutableElement> consumedMethods = methodsConsumedByExtensions(element, applicableExtensions, context, abstractMethods, properties);
 
-        if(!consumedMethods.isEmpty()){
+        if (!consumedMethods.isEmpty()) {
             propertyMethods = immutableSetDifference(propertyMethods, consumedMethods);
         }
 
