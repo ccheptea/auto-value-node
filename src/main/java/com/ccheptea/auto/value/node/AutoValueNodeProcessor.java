@@ -79,7 +79,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         TypeSpec.Builder builder = TypeSpec
                 .classBuilder(ClassName.get(packageName, "Node_" + autoValueClass))
                 .addModifiers(PUBLIC, FINAL)
-                .superclass(ParameterizedTypeName.get(ClassName.get(Node.class), ClassName.get(typeElement)))
+                .superclass(ParameterizedTypeName.get(ClassName.get(Node.class), boxedTypeName(typeElement.asType())))
                 .addMethod(generateConstructor(typeElement));
 
         ImmutableSet<ExecutableElement> properties = getProperties(typeElement);
@@ -97,7 +97,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
 
                 builder.addMethod(generateNodeablePropertyMethod(propertyTypePackage, propertyTypeSimpleName, propertyName.toString()));
             } else {
-                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), property.getReturnType().toString(), propertyName.toString()));
+                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyName.toString()));
             }
 
             System.out.println(propertyName);
@@ -113,12 +113,18 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
                 .build();
     }
 
-    private MethodSpec generateSimplePropertyMethod(TypeMirror returnType, String returnTypeSuffix, String methodName) {
+    private MethodSpec generateSimplePropertyMethod(TypeMirror returnType, String methodName) {
         return MethodSpec.methodBuilder(methodName)
-                .returns(ParameterizedTypeName.get(ClassName.get(Node_Wrapper.class), ClassName.get(returnType)))
+                .returns(ParameterizedTypeName.get(ClassName.get(Node_Wrapper.class), boxedTypeName(returnType)))
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                 .addStatement("return new Node_Wrapper<>(value == null ? null : value.$L())", methodName)
                 .build();
+    }
+
+    private TypeName boxedTypeName(TypeMirror typeMirror) {
+        return typeMirror.getKind().isPrimitive()
+                ? TypeName.get(typeMirror).box()
+                : TypeName.get(typeMirror);
     }
 
     private ImmutableSet<ExecutableElement> getProperties(TypeElement element) {

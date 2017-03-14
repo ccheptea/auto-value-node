@@ -4,8 +4,8 @@ import java.lang.Override;
 import java.lang.String;
 
 final class AutoValue_Wand extends $AutoValue_Wand {
-    AutoValue_Wand(Owner owner, String wood) {
-        super(owner, wood);
+    AutoValue_Wand(Owner owner, String wood, int status, boolean broken) {
+        super(owner, wood, status, broken);
     }
 
     @Override

@@ -8,5 +8,10 @@ public abstract class Wand {
 
     public abstract String wood();
 
+    public abstract int status();
+
+
+    public abstract boolean broken();
+
     public abstract Node_Wand node();
 }
