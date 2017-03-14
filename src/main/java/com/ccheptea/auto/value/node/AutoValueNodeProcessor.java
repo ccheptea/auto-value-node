@@ -201,8 +201,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         return extension.getClass().getName();
     }
 
-    private ImmutableBiMap<String, ExecutableElement> propertyNameToMethodMap(
-            Set<ExecutableElement> propertyMethods) {
+    private ImmutableBiMap<String, ExecutableElement> propertyNameToMethodMap(Set<ExecutableElement> propertyMethods) {
         Map<String, ExecutableElement> map = Maps.newLinkedHashMap();
         boolean allPrefixed = gettersAllPrefixed(propertyMethods);
         for (ExecutableElement method : propertyMethods) {
@@ -210,7 +209,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             String name = allPrefixed ? nameWithoutPrefix(methodName) : methodName;
             Object old = map.put(name, method);
             if (old != null) {
-                errorReporter.reportError("More than one @AutoValue property called " + name, method);
+                errorReporter.reportWarning("More than one @AutoValue property called " + name, method);
             }
         }
         return ImmutableBiMap.copyOf(map);
