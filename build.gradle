@@ -46,3 +46,5 @@ dependencies {
     testCompile files(Jvm.current().getToolsJar())
     testCompile files("${buildDir}/generated")
 }
+
+apply from: rootProject.file('gradle/gradle-mvn-push.gradle')
