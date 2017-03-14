@@ -1,4 +1,4 @@
-# AutoValue: Node Extension [![Build Status](https://travis-ci.org/ccheptea/auto-value-node.svg?branch=master)](https://travis-ci.org/ccheptea/auto-value-variant)
+# AutoValue: Node Extension [![Build Status](https://travis-ci.org/ccheptea/auto-value-node.svg?branch=master)](https://travis-ci.org/ccheptea/auto-value-node)
 
 An extension for Google's [AutoValue](https://github.com/google/auto/tree/master/value) that simplifies access to object
 fields by eliminating the need for null checks and preventing NPE's.
