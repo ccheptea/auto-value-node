@@ -45,8 +45,6 @@ public class AutoValueNodeExtension extends AutoValueExtension {
     public boolean applicable(Context context) {
         TypeElement type = context.autoValueClass();
 
-        System.out.println("Checking " + type.getSimpleName());
-
         for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
             TypeMirror rType = method.getReturnType();
             TypeName returnType = TypeName.get(rType);
