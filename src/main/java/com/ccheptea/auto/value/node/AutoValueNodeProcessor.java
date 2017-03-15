@@ -56,11 +56,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             }
         }
 
-        System.out.println("Found " + typeElements.size() + " node classes");
-
         for (TypeElement element : typeElements.values()) {
-            System.out.println("Node class => " + element);
-
             String packageName = packageNameOf(element);
             TypeSpec nodeClass = createNodeClass(element, packageName, typeElements);
             JavaFile file = JavaFile.builder(packageName, nodeClass).build();
@@ -83,13 +79,11 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
                 .addMethod(generateConstructor(typeElement));
 
         ImmutableSet<ExecutableElement> properties = getProperties(typeElement);
-        System.out.println("\nListing properties " + properties.size() + " for " + autoValueClass + ":");
+
         for (ExecutableElement property : properties) {
             Name propertyName = property.getSimpleName();
 
             String propertyTypeQualifiedName = property.getReturnType().toString();
-
-            System.out.println(propertyTypeQualifiedName);
 
             if (typeElements.keySet().contains(propertyTypeQualifiedName)) {
                 String propertyTypePackage = packageNameOf(typeElements.get(propertyTypeQualifiedName));
@@ -99,8 +93,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             } else {
                 builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyName.toString()));
             }
-
-            System.out.println(propertyName);
         }
         return builder.build();
     }
@@ -133,15 +125,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         ImmutableSet<ExecutableElement> abstractMethods = abstractMethodsIn(methods);
         ImmutableSet<ExecutableElement> propertyMethods = propertyMethodsIn(abstractMethods);
         ImmutableBiMap<String, ExecutableElement> properties = propertyNameToMethodMap(abstractMethods);
-
-//        BuilderSpec builderSpec = new BuilderSpec(type, processingEnv, errorReporter);
-//        Optional<BuilderSpec.Builder> builder = builderSpec.getBuilder();
-//        ImmutableSet<ExecutableElement> toBuilderMethods;
-//        if (builder.isPresent()) {
-//            toBuilderMethods = builder.get().toBuilderMethods(typeUtils, abstractMethods);
-//        } else {
-//            toBuilderMethods = ImmutableSet.of();
-//        }
 
         ExtensionContext context = new ExtensionContext(processingEnv, element, properties, abstractMethods);
         ImmutableList<AutoValueExtension> applicableExtensions = applicableExtensions(element, context);

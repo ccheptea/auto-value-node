@@ -23,8 +23,6 @@ import java.util.Set;
 @AutoService(AutoValueExtension.class)
 public class AutoValueNodeExtension extends AutoValueExtension {
 
-    TypeMirror returnType;
-
     @Override
     public boolean mustBeFinal(Context context) {
         return false;
@@ -37,7 +35,6 @@ public class AutoValueNodeExtension extends AutoValueExtension {
             switch (element.getSimpleName().toString()) {
                 case "node":
                     methods.add(element);
-                    returnType = element.getReturnType();
                     break;
             }
         }
