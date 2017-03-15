@@ -20,12 +20,8 @@ package com.ccheptea.auto.value.node;
 import com.google.auto.common.MoreTypes;
 import com.google.common.base.Equivalence;
 
-import java.util.AbstractSet;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Set;
 import javax.lang.model.type.TypeMirror;
+import java.util.*;
 
 /**
  * A set of TypeMirror objects.

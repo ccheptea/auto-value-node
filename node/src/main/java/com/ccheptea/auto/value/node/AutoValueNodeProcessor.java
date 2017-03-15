@@ -1,5 +1,7 @@
 package com.ccheptea.auto.value.node;
 
+import com.ccheptea.auto.value.node.runtime.Node;
+import com.ccheptea.auto.value.node.runtime.Node_Wrapper;
 import com.google.auto.service.AutoService;
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.AutoValueExtension;

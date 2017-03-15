@@ -49,8 +49,6 @@ public class AutoValueNodeExtension extends AutoValueExtension {
             TypeMirror rType = method.getReturnType();
             TypeName returnType = TypeName.get(rType);
 
-            System.out.println(returnType.toString());
-
             if (returnType.toString().equals("Node_" + type.getSimpleName())) {
                 return true;
             }

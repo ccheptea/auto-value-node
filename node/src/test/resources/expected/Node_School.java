@@ -1,7 +1,7 @@
 package input;
 
-import com.ccheptea.auto.value.node.Node;
-import com.ccheptea.auto.value.node.Node_Wrapper;
+import com.ccheptea.auto.value.node.runtime.Node;
+import com.ccheptea.auto.value.node.runtime.Node_Wrapper;
 import java.lang.String;
 
 public final class Node_School extends Node<School> {

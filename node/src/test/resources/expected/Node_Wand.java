@@ -1,7 +1,7 @@
 package input;
 
-import com.ccheptea.auto.value.node.Node;
-import com.ccheptea.auto.value.node.Node_Wrapper;
+import com.ccheptea.auto.value.node.runtime.Node;
+import com.ccheptea.auto.value.node.runtime.Node_Wrapper;
 import java.lang.Boolean;
 import java.lang.Integer;
 import java.lang.String;

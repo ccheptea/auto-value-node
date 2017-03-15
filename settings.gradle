@@ -1,2 +1,6 @@
 rootProject.name = 'auto-value-node'
+include 'node'
+findProject(':node')?.name = 'auto-value-node'
+include 'runtime'
+findProject(':runtime')?.name = 'auto-value-node-runtime'
 
