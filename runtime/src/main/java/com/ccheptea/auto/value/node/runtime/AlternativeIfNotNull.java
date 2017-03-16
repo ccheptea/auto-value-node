@@ -22,11 +22,12 @@ public final class AlternativeIfNotNull<T> {
         }
     }
 
-    public Stream<T> otherwiseStream() {
+    public Stream otherwiseStream() {
         if (value != null) {
+            if(value instanceof Iterable)
             return Stream.of(value);
         }
 
-        return Stream.of(Collections.EMPTY_LIST);
+        return Stream.empty();
     }
 }

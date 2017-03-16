@@ -39,11 +39,11 @@ public abstract class Node<T> {
         return new AlternativeIfNotNull<T>(value);
     }
 
-    public Stream<T> ifPresentStream() {
+    public Stream ifPresentStream() {
         if (value != null) {
             return Stream.of(value);
         }
 
-        return Stream.of(Collections.EMPTY_LIST);
+        return Stream.empty();
     }
 }
