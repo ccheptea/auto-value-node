@@ -10,7 +10,8 @@ fields by eliminating the need for null checks and preventing NPE's.
 ## Download
 
 ```groovy
-compile 'com.ccheptea.auto.value:auto-value-node:0.1.0-SNAPSHOT'
+annotationProcessor 'com.ccheptea.auto.value:auto-value-node:0.1.3'
+compile 'com.ccheptea.auto.value:auto-value-node-runtime:0.1.3'
  ```
 
 Snapshots of the development version are available in [Sonatype's `snapshots` repository][snap].
