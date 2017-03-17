@@ -36,7 +36,7 @@ public abstract class Node<T> {
             action.execute();
         }
 
-        return new AlternativeIfNotNull<T>(value);
+        return new AlternativeIfNotNull<>(value);
     }
 
     public Stream ifPresentStream() {
