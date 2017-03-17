@@ -3,7 +3,7 @@
 An extension for Google's [AutoValue](https://github.com/google/auto/tree/master/value) that:
 
 * Eliminates null checks when accessing object fields;
-* Prevents ``NullPointerExeption``'s;
+* Prevents ``NullPointerException``'s;
 * Increases code readability and maintainability;
 * Works great with Lambdas;
 
@@ -31,7 +31,7 @@ System.out.println(car.driver().club().contact().email());
 ```
 
 What if the car doesn't have a driver? Well, our code will break with a ``NullPointerException``. What if the car has 
-a driver that is not a member of any club. Then what if the driver is member of a club, but its email is not listed?
+a driver that is not a member of any club. Or, what if the driver is member of a club, but its email is not listed?
 We will have to check all those before printing. We will end up with this:
 
 ```java
@@ -40,17 +40,17 @@ if(car.driver()!=null && car.driver().club()!= null && car.driver().club().conta
 }
 ```
 
-It works but it is hard to maintain and to follow. Most likely you'll have plenty of places in your code where
+This works but it is hard to read and to maintain. And most likely you'll have plenty of places in your code where
 you'll need to write similar checks.
 
 Using **auto-value-node** the code above will become like this (assuming you use lambdas):
 
 ```java 
-car.node().driver().club().contact().ifPresent(System.out::println);
+car.node().driver().club().contact().email().ifPresent(System.out::println);
 ```
 
 ## Usage
-Integrating **auto-value-node** takes very little effort. First add the dependencies listed below, then add the following
+Integrating **auto-value-node** takes very little effort. First [add the dependencies][download], then add the following
 method to each AutoValue class:
 
 ```java
@@ -62,16 +62,9 @@ Make sure to replace "<your_class_name>" with the actual class name. That is all
 * ``ifPresent(Action1)`` applies an action on the value if it is not ``null``, followed by
     * ``otherwise(Action)`` executes an action if the value is ``null``;
 * ``ifNotPresent()`` executes an action if the value is ``null``, followed by
-    * ``otherwise`` applies an action on the value if it is not ``null``;
+    * ``otherwise(Acton1)`` applies an action on the value if it is not ``null``;
 * ``exists()`` returns ``true`` if the value is not ``null``; ``false`` otherwise;
 * ``value()`` returns the value contained by the node;
-
-## What's in progress
-
-* Support for RxJava (reactiveValue)
-* Streams support
-* A few other handy methods
-* Corresponding visibility in Node classes
 
 ## Download
 
@@ -102,3 +95,4 @@ limitations under the License.
 ```
 
 [snap]: https://oss.sonatype.org/content/repositories/snapshots/
+[download]: https://github.com/ccheptea/auto-value-node#download
