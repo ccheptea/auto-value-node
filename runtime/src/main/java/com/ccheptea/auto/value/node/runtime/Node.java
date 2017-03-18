@@ -45,7 +45,12 @@ public abstract class Node<T> {
         action1.execute(value);
     }
 
-    public Observable<T> reactiveValue() {
+    public Observable<T> react() {
         return Observable.just(value);
     }
+
+    public <Z> Z map(Mapper<T, Z> mapper) {
+        return mapper.map(value);
+    }
+    
 }
