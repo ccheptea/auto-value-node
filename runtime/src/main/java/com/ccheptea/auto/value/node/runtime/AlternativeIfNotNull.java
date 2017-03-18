@@ -1,9 +1,6 @@
 package com.ccheptea.auto.value.node.runtime;
 
-import com.annimon.stream.Stream;
-
-import java.util.Collections;
-
+import io.reactivex.Observable;
 
 /**
  * Created by constantin.cheptea
@@ -22,12 +19,7 @@ public final class AlternativeIfNotNull<T> {
         }
     }
 
-    public Stream otherwiseStream() {
-        if (value != null) {
-            if(value instanceof Iterable)
-            return Stream.of(value);
-        }
-
-        return Stream.empty();
+    public Observable<T> otherwiseReact() {
+        return Observable.just(value);
     }
 }

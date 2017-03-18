@@ -1,8 +1,10 @@
 package com.ccheptea.auto.value.node.runtime;
 
-import com.annimon.stream.Stream;
+import io.reactivex.Observable;
+import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 
-import java.util.Collections;
+import java.lang.reflect.Proxy;
 
 /**
  * Created by constantin.cheptea
@@ -23,9 +25,9 @@ public abstract class Node<T> {
         return value != null;
     }
 
-    public AlternativeIfNull<T> ifPresent(Action1<T> action) {
+    public AlternativeIfNull<T> ifPresent(Action1<T> action1) {
         if (value != null) {
-            action.execute(value);
+            action1.execute(value);
         }
 
         return new AlternativeIfNull<>(value);
@@ -39,11 +41,11 @@ public abstract class Node<T> {
         return new AlternativeIfNotNull<>(value);
     }
 
-    public Stream ifPresentStream() {
-        if (value != null) {
-            return Stream.of(value);
-        }
+    public void anyValue(Action1<T> action1) {
+        action1.execute(value);
+    }
 
-        return Stream.empty();
+    public Observable<T> reactiveValue() {
+        return Observable.just(value);
     }
 }
