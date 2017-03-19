@@ -1,7 +1,5 @@
 package com.ccheptea.auto.value.node.runtime;
 
-import io.reactivex.Observable;
-
 /**
  * Created by constantin.cheptea
  * on 13/03/2017.
@@ -13,13 +11,15 @@ public final class AlternativeIfNotNull<T> {
         this.value = value;
     }
 
+    /**
+     * Similar to an if-else block, this method executes an action on
+     * the "else" branch
+     *
+     * @param action the action to be executed with the value
+     */
     public void otherwise(Action1<T> action) {
         if (value != null) {
             action.execute(value);
         }
-    }
-
-    public Observable<T> otherwiseReact() {
-        return Observable.just(value);
     }
 }
