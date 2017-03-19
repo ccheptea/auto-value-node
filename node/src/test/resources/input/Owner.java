@@ -7,6 +7,6 @@ import com.google.auto.value.AutoValue;
  * on 09/03/2017.
  */
 @AutoValue
-public abstract class Owner implements IOwner{
+abstract class Owner implements IOwner{
     public abstract Node_Owner node();
 }

@@ -5,7 +5,7 @@ import com.ccheptea.auto.value.node.runtime.Node_Wrapper;
 
 import java.lang.String;
 
-public final class Node_Owner extends Node<Owner> {
+final class Node_Owner extends Node<Owner> {
 
     public Node_Owner(Owner value) {
         super(value);

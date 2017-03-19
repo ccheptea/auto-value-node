@@ -6,9 +6,9 @@ import com.google.auto.value.AutoValue;
 public abstract class Wand {
     public abstract Owner owner();
 
-    public abstract String wood();
+    abstract String wood();
 
-    public abstract int status();
+    protected abstract int status();
 
 
     public abstract boolean broken();

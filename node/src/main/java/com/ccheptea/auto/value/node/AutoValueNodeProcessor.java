@@ -16,6 +16,7 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
@@ -25,8 +26,7 @@ import java.io.IOException;
 import java.util.*;
 
 import static com.google.auto.common.MoreElements.getLocalAndInheritedMethods;
-import static javax.lang.model.element.Modifier.FINAL;
-import static javax.lang.model.element.Modifier.PUBLIC;
+import static javax.lang.model.element.Modifier.*;
 import static javax.tools.Diagnostic.Kind.ERROR;
 
 /**
@@ -35,14 +35,88 @@ import static javax.tools.Diagnostic.Kind.ERROR;
  */
 @AutoService(Processor.class)
 public class AutoValueNodeProcessor extends AbstractProcessor {
-    AutoValueNodeExtension extension = new AutoValueNodeExtension();
+    private AutoValueNodeExtension extension = new AutoValueNodeExtension();
+    private ImmutableList<AutoValueExtension> extensions;
     private Types typeUtils;
     private Elements elementUtils;
-
     private ErrorReporter errorReporter;
 
-    ImmutableList<AutoValueExtension> extensions;
+    private static <E> ImmutableSet<E> immutableSetDifference(ImmutableSet<E> a, ImmutableSet<E> b) {
+        if (Collections.disjoint(a, b)) {
+            return a;
+        } else {
+            return ImmutableSet.copyOf(Sets.difference(a, b));
+        }
+    }
 
+    private static String extensionName(AutoValueExtension extension) {
+        return extension.getClass().getName();
+    }
+
+    private static boolean gettersAllPrefixed(Set<ExecutableElement> methods) {
+        return prefixedGettersIn(methods).size() == methods.size();
+    }
+
+    private static ImmutableSet<ExecutableElement> prefixedGettersIn(Iterable<ExecutableElement> methods) {
+        ImmutableSet.Builder<ExecutableElement> getters = ImmutableSet.builder();
+        for (ExecutableElement method : methods) {
+            String name = method.getSimpleName().toString();
+            // TODO(emcmanus): decide whether getfoo() (without a capital) is a getter. Currently it is.
+            boolean get = name.startsWith("get") && !name.equals("get");
+            boolean is = name.startsWith("is") && !name.equals("is")
+                    && method.getReturnType().getKind() == TypeKind.BOOLEAN;
+            if (get || is) {
+                getters.add(method);
+            }
+        }
+        return getters.build();
+    }
+
+    private static MethodSpec generateConstructor(TypeElement autoValueClass) {
+        return MethodSpec.constructorBuilder()
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(TypeName.get(autoValueClass.asType()), "value")
+                .addStatement("super(value)")
+                .build();
+    }
+
+    private static String classNameOf(TypeElement type) {
+        String name = type.getQualifiedName().toString();
+        String pkgName = packageNameOf(type);
+        return pkgName.isEmpty() ? name : name.substring(pkgName.length() + 1);
+    }
+
+    private static String packageNameOf(TypeElement type) {
+        while (true) {
+            Element enclosing = type.getEnclosingElement();
+            if (enclosing instanceof PackageElement) {
+                return ((PackageElement) enclosing).getQualifiedName().toString();
+            }
+            type = (TypeElement) enclosing;
+        }
+    }
+
+    private static ObjectMethodToOverride objectMethodToOverride(ExecutableElement method) {
+        String name = method.getSimpleName().toString();
+        switch (method.getParameters().size()) {
+            case 0:
+                if (name.equals("toString")) {
+                    return ObjectMethodToOverride.TO_STRING;
+                } else if (name.equals("hashCode")) {
+                    return ObjectMethodToOverride.HASH_CODE;
+                }
+                break;
+            case 1:
+                if (name.equals("equals")
+                        && method.getParameters().get(0).asType().toString().equals("java.lang.Object")) {
+                    return ObjectMethodToOverride.EQUALS;
+                }
+                break;
+            default:
+                // No relevant Object methods have more than one parameter.
+        }
+        return ObjectMethodToOverride.NONE;
+    }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
@@ -76,14 +150,20 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         String autoValueClass = classNameOf(typeElement);
         TypeSpec.Builder builder = TypeSpec
                 .classBuilder(ClassName.get(packageName, "Node_" + autoValueClass))
-                .addModifiers(PUBLIC, FINAL)
+                .addModifiers(FINAL)
                 .superclass(ParameterizedTypeName.get(ClassName.get(Node.class), boxedTypeName(typeElement.asType())))
                 .addMethod(generateConstructor(typeElement));
+
+        Modifier visibility = getVisibility(typeElement.getModifiers());
+        if (visibility != null) {
+            builder.addModifiers(visibility);
+        }
 
         ImmutableSet<ExecutableElement> properties = getProperties(typeElement);
 
         for (ExecutableElement property : properties) {
             Name propertyName = property.getSimpleName();
+            Modifier propertyVisibility = getVisibility(property.getModifiers());
 
             String propertyTypeQualifiedName = property.getReturnType().toString();
 
@@ -91,28 +171,51 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
                 String propertyTypePackage = packageNameOf(typeElements.get(propertyTypeQualifiedName));
                 String propertyTypeSimpleName = classNameOf(typeElements.get(propertyTypeQualifiedName));
 
-                builder.addMethod(generateNodeablePropertyMethod(propertyTypePackage, propertyTypeSimpleName, propertyName.toString()));
+                builder.addMethod(generateNodeablePropertyMethod(propertyTypePackage, propertyTypeSimpleName, propertyName.toString(), propertyVisibility));
             } else {
-                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyName.toString()));
+                builder.addMethod(generateSimplePropertyMethod(property.getReturnType(), propertyName.toString(), propertyVisibility));
             }
         }
         return builder.build();
     }
 
-    private MethodSpec generateNodeablePropertyMethod(String propertyTypePackage, String returnTypeSuffix, String methodName) {
-        return MethodSpec.methodBuilder(methodName)
-                .returns(ClassName.get(propertyTypePackage, "Node_" + returnTypeSuffix))
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .addStatement("return new Node_$L(value == null ? null : value.$L())", returnTypeSuffix, methodName)
-                .build();
+    private Modifier getVisibility(Set<Modifier> modifiers) {
+        if (modifiers.contains(PUBLIC)) {
+            return PUBLIC;
+        }
+
+        if (modifiers.contains(PROTECTED)) {
+            return PROTECTED;
+        }
+
+        if (modifiers.contains(PRIVATE)) {
+            return PRIVATE;
+        }
+
+        return null;
     }
 
-    private MethodSpec generateSimplePropertyMethod(TypeMirror returnType, String methodName) {
-        return MethodSpec.methodBuilder(methodName)
+    private MethodSpec generateNodeablePropertyMethod(String propertyTypePackage, String returnTypeSuffix, String methodName, Modifier visibility) {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
+                .returns(ClassName.get(propertyTypePackage, "Node_" + returnTypeSuffix))
+                .addModifiers(Modifier.FINAL)
+                .addStatement("return new Node_$L(value == null ? null : value.$L())", returnTypeSuffix, methodName);
+        if (visibility != null) {
+            builder.addModifiers(visibility);
+        }
+        return builder.build();
+    }
+
+    private MethodSpec generateSimplePropertyMethod(TypeMirror returnType, String methodName, Modifier visibility) {
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(methodName)
                 .returns(ParameterizedTypeName.get(ClassName.get(Node_Wrapper.class), boxedTypeName(returnType)))
-                .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .addStatement("return new Node_Wrapper<>(value == null ? null : value.$L())", methodName)
-                .build();
+                .addModifiers(Modifier.FINAL)
+                .addStatement("return new Node_Wrapper<>(value == null ? null : value.$L())", methodName);
+
+        if (visibility != null) {
+            builder.addModifiers(visibility);
+        }
+        return builder.build();
     }
 
     private TypeName boxedTypeName(TypeMirror typeMirror) {
@@ -137,14 +240,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         }
 
         return propertyMethods;
-    }
-
-    private static <E> ImmutableSet<E> immutableSetDifference(ImmutableSet<E> a, ImmutableSet<E> b) {
-        if (Collections.disjoint(a, b)) {
-            return a;
-        } else {
-            return ImmutableSet.copyOf(Sets.difference(a, b));
-        }
     }
 
     private ImmutableSet<ExecutableElement> methodsConsumedByExtensions(
@@ -188,10 +283,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         return ImmutableSet.copyOf(consumed);
     }
 
-    private static String extensionName(AutoValueExtension extension) {
-        return extension.getClass().getName();
-    }
-
     private ImmutableBiMap<String, ExecutableElement> propertyNameToMethodMap(Set<ExecutableElement> propertyMethods) {
         Map<String, ExecutableElement> map = Maps.newLinkedHashMap();
         boolean allPrefixed = gettersAllPrefixed(propertyMethods);
@@ -204,25 +295,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             }
         }
         return ImmutableBiMap.copyOf(map);
-    }
-
-    private static boolean gettersAllPrefixed(Set<ExecutableElement> methods) {
-        return prefixedGettersIn(methods).size() == methods.size();
-    }
-
-    static ImmutableSet<ExecutableElement> prefixedGettersIn(Iterable<ExecutableElement> methods) {
-        ImmutableSet.Builder<ExecutableElement> getters = ImmutableSet.builder();
-        for (ExecutableElement method : methods) {
-            String name = method.getSimpleName().toString();
-            // TODO(emcmanus): decide whether getfoo() (without a capital) is a getter. Currently it is.
-            boolean get = name.startsWith("get") && !name.equals("get");
-            boolean is = name.startsWith("is") && !name.equals("is")
-                    && method.getReturnType().getKind() == TypeKind.BOOLEAN;
-            if (get || is) {
-                getters.add(method);
-            }
-        }
-        return getters.build();
     }
 
     /**
@@ -246,14 +318,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         return Introspector.decapitalize(name);
     }
 
-    private static MethodSpec generateConstructor(TypeElement autoValueClass) {
-        return MethodSpec.constructorBuilder()
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(TypeName.get(autoValueClass.asType()), "value")
-                .addStatement("super(value)")
-                .build();
-    }
-
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         return ImmutableSet.of(AutoValue.class.getName());
@@ -269,22 +333,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         super.init(processingEnv);
         typeUtils = processingEnv.getTypeUtils();
         elementUtils = processingEnv.getElementUtils();
-    }
-
-    private static String classNameOf(TypeElement type) {
-        String name = type.getQualifiedName().toString();
-        String pkgName = packageNameOf(type);
-        return pkgName.isEmpty() ? name : name.substring(pkgName.length() + 1);
-    }
-
-    private static String packageNameOf(TypeElement type) {
-        while (true) {
-            Element enclosing = type.getEnclosingElement();
-            if (enclosing instanceof PackageElement) {
-                return ((PackageElement) enclosing).getQualifiedName().toString();
-            }
-            type = (TypeElement) enclosing;
-        }
     }
 
     private ImmutableSet<ExecutableElement> abstractMethodsIn(ImmutableSet<ExecutableElement> methods) {
@@ -321,28 +369,6 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
             }
         }
         return properties.build();
-    }
-
-    private static ObjectMethodToOverride objectMethodToOverride(ExecutableElement method) {
-        String name = method.getSimpleName().toString();
-        switch (method.getParameters().size()) {
-            case 0:
-                if (name.equals("toString")) {
-                    return ObjectMethodToOverride.TO_STRING;
-                } else if (name.equals("hashCode")) {
-                    return ObjectMethodToOverride.HASH_CODE;
-                }
-                break;
-            case 1:
-                if (name.equals("equals")
-                        && method.getParameters().get(0).asType().toString().equals("java.lang.Object")) {
-                    return ObjectMethodToOverride.EQUALS;
-                }
-                break;
-            default:
-                // No relevant Object methods have more than one parameter.
-        }
-        return ObjectMethodToOverride.NONE;
     }
 
     private ImmutableList<AutoValueExtension> applicableExtensions(TypeElement type, ExtensionContext context) {
@@ -392,7 +418,7 @@ public class AutoValueNodeProcessor extends AbstractProcessor {
         private final ProcessingEnvironment processingEnvironment;
         private final TypeElement autoValueClass;
 
-        public LimitedContext(ProcessingEnvironment processingEnvironment, TypeElement autoValueClass) {
+        LimitedContext(ProcessingEnvironment processingEnvironment, TypeElement autoValueClass) {
             this.processingEnvironment = processingEnvironment;
             this.autoValueClass = autoValueClass;
         }

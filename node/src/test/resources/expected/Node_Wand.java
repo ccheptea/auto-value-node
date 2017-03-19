@@ -16,11 +16,11 @@ public final class Node_Wand extends Node<Wand> {
         return new Node_Owner(value == null ? null : value.owner());
     }
 
-    public final Node_Wrapper<String> wood() {
+    final Node_Wrapper<String> wood() {
         return new Node_Wrapper<>(value == null ? null : value.wood());
     }
 
-    public final Node_Wrapper<Integer> status() {
+    protected final Node_Wrapper<Integer> status() {
         return new Node_Wrapper<>(value == null ? null : value.status());
     }
 
