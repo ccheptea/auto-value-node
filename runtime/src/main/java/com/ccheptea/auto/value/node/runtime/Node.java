@@ -21,6 +21,16 @@ public abstract class Node<T> {
     }
 
     /**
+     * Allows setting an alternative value if the value is null
+     *
+     * @param alternativeValue the value to return if the contained value is null
+     * @return value if it is not null, alternativeValue otherwise
+     */
+    public T value(T alternativeValue) {
+        return value != null ? value : alternativeValue;
+    }
+
+    /**
      * Used to determine if the value exists.
      *
      * @return true if the value exists, false if the value is null
