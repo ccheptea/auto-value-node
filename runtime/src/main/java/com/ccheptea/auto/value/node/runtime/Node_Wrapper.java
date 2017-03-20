@@ -11,4 +11,8 @@ public class Node_Wrapper<T> extends Node<T> {
     public Node_Wrapper(T value) {
         super(value);
     }
+
+    public static <T> Node<T> empty() {
+        return new Node_Wrapper<>(null);
+    }
 }

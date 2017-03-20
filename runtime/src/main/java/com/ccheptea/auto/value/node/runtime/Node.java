@@ -35,7 +35,7 @@ public abstract class Node<T> {
      *
      * @return true if the value exists, false if the value is null
      */
-    public boolean exists() {
+    public boolean isPresent() {
         return value != null;
     }
 
@@ -52,10 +52,10 @@ public abstract class Node<T> {
      * Used to check a condition applied to the value
      *
      * @param predicate the predicate defining the condition
-     * @return true if the result is true; false otherwise
+     * @return a Node containing the value if the match is successful; an empty Node otherwise
      */
-    public boolean passesTest(Predicate<T> predicate) {
-        return predicate.test(value);
+    public Node<T> match(Predicate<T> predicate) {
+        return predicate.test(value) ? new Node_Wrapper<>(value) : Node_Wrapper.<T>empty();
     }
 
     /**
@@ -78,7 +78,7 @@ public abstract class Node<T> {
      * @param action the action to execute
      * @return an AlternativeIfNotNull object to handle the contrary case
      */
-    public AlternativeIfNotNull<T> ifNotPresent(Action action) {
+    public AlternativeIfNotNull<T> ifAbsent(Action action) {
         if (value == null) {
             action.execute();
         }
