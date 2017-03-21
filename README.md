@@ -76,8 +76,8 @@ Make sure to replace "<your_class_name>" with the actual class name. That is all
 ## Download
 
 ```groovy
-annotationProcessor 'com.ccheptea.auto.value:auto-value-node:0.1.3'
-compile 'com.ccheptea.auto.value:auto-value-node-runtime:0.1.3'
+annotationProcessor 'com.ccheptea.auto.value:auto-value-node:0.2.8'
+compile 'com.ccheptea.auto.value:auto-value-node-runtime:0.2.8'
  ```
 
 Snapshots of the development version are available in [Sonatype's `snapshots` repository][snap].
