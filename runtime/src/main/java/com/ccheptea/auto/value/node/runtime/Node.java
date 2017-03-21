@@ -21,7 +21,7 @@ public abstract class Node<T> {
     }
 
     /**
-     * Allows setting an alternative value if the value is null
+     * Allows returning an alternative value if the value is null
      *
      * @param alternativeValue the value to return if the contained value is null
      * @return value if it is not null, alternativeValue otherwise
@@ -87,12 +87,22 @@ public abstract class Node<T> {
     }
 
     /**
-     * Executes an action with the value, regardless if it is null or not
+     * Executes an action with the value, regardless if it is present or not
      *
      * @param action1 the action to execute
      */
-    public void anyValue(Action1<T> action1) {
+    public void withValue(Action1<T> action1) {
         action1.execute(value);
+    }
+
+    /**
+     * Returns a Node with value or alternativeValue
+     *
+     * @param alternativeValue the value for the new node if the contained value is null
+     * @return a Node with the contained value if it is not null; a Node with alternativeValue otherwise
+     */
+    public Node<T> orAlternative(T alternativeValue) {
+        return value != null ? new Node_Wrapper<>(value) : new Node_Wrapper<>(alternativeValue);
     }
 
     /**

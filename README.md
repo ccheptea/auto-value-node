@@ -2,9 +2,10 @@
 
 An extension for Google's [AutoValue](https://github.com/google/auto/tree/master/value) that:
 
-* Eliminates null checks when accessing object fields;
+* Eliminates null checks when accessing AutoValue object fields;
 * Prevents ``NullPointerException``'s;
-* Increases code readability and maintainability;
+* Increases code readability and maintainability (less if-else blocks);
+* Easier to read and understand than Java 8 Optionals
 * Works great with Lambdas;
 
 ## Use case
@@ -59,12 +60,18 @@ public abstract Node_<your_class_name> node();
 Make sure to replace "<your_class_name>" with the actual class name. That is all.
 
 ### Node methods
-* ``ifPresent(Action1)`` applies an action on the value if it is not ``null``, followed by
+* ``withValue(Action1)`` executes an action with the value;
+* ``ifPresent(Action1)`` executes an action with the value if it is not ``null``, followed by
     * ``otherwise(Action)`` executes an action if the value is ``null``;
-* ``ifNotPresent()`` executes an action if the value is ``null``, followed by
+* ``ifAbsent(Action)`` executes an action if the value is ``null``, followed by
     * ``otherwise(Acton1)`` applies an action on the value if it is not ``null``;
-* ``exists()`` returns ``true`` if the value is not ``null``; ``false`` otherwise;
+* ``match(Predicate)`` returns a Node with the value if the predicate is true; a Node with null otherwise
+* ``map(Mapper)`` returns a mapped value defined by Mapper (e.g.: ``car.node().driver().club().map(Observable::just)`` == ``Observable.just(car.driver().club())``);
+* ``orAlernative(alternativeValue)`` returns a Node containing the value if it is not null; a Node with alternativeValue otherwise
+* ``isPresent()`` returns ``true`` if the value is not ``null``; ``false`` otherwise;
+* ``isAbsent()`` returns ``false`` if the value is not ``null``; ``true`` otherwise;
 * ``value()`` returns the value contained by the node;
+* ``value(alternativeValue)`` returns the value contained by the node if it is present; alternativeValue otherwise;
 
 ## Download
 
